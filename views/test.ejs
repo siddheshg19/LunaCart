@@ -1,0 +1,185 @@
+<%- include('partials/header') %>
+
+<div class="container py-5" style="margin-top: 100px;">
+  <h1 class="text-center mb-4">Explore Products</h1>
+  <div id="purchaseStatusArea" class="alert alert-light text-center d-none" role="alert"></div>
+  <div class="row" id="productList"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+
+<script>
+  // --- Retail Contract Configuration ---
+  let retailContract;
+  const retailContractAddress = "0xb6DAf3fa7E01eB5af0f36F82a2f74920994A2696";
+  const retailContractABI = [ /* --- PASTE YOUR FULL RETAIL ABI HERE --- */ ]; // Ensure full ABI
+
+  // --- Loyalty Token Configuration ---
+  let loyaltyTokenContract;
+  const loyaltyTokenAddress = "0x0Fbf6CD6EF5d9b2b4E586dc37f8fa6231155C63c";
+  const loyaltyTokenSymbol = "LCDT";
+  const loyaltyTokenABI = [ // ABI needs transferFrom
+        {"constant":true,"inputs":[{"name":"_owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"balance","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},
+        {"constant":false,"inputs":[{"name":"sender","type":"address"},{"name":"recipient","type":"address"},{"name":"amount","type":"uint256"}],"name":"transferFrom","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"nonpayable","type":"function"},
+        // Include events if needed
+        {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"from","type":"address"},{"indexed":true,"internalType":"address","name":"to","type":"address"},{"indexed":false,"internalType":"uint256","name":"value","type":"uint256"}],"name":"Transfer","type":"event"}
+  ];
+  const rewardAmount = 10;
+  // --- Address holding the reward tokens ---
+  const rewardSenderAddress = "0x83664A76fe5BC0F743522375A3144781bEd213EA"; // The specified sender address
+
+  // --- Global Web3 and Account State ---
+  let web3;
+  let currentAccount = null;
+
+  // --- DOM Elements ---
+  let productListEl;
+  let purchaseStatusAreaEl;
+
+  // --- Initialization ---
+  window.addEventListener('load', async () => {
+    productListEl = document.getElementById("productList");
+    purchaseStatusAreaEl = document.getElementById("purchaseStatusArea");
+
+    if (typeof window.ethereum !== 'undefined') {
+      web3 = new Web3(window.ethereum);
+      try {
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        currentAccount = accounts[0];
+        console.log("MetaMask connected:", currentAccount);
+
+        retailContract = new web3.eth.Contract(retailContractABI, retailContractAddress);
+        loyaltyTokenContract = new web3.eth.Contract(loyaltyTokenABI, loyaltyTokenAddress);
+
+        loadProducts();
+        window.ethereum.on('accountsChanged', handleAccountsChanged);
+
+      } catch (error) {
+        console.error("MetaMask connection error:", error);
+        displayStatus('Failed to connect MetaMask. Please allow connection and refresh.', 'alert-danger', false);
+      }
+    } else {
+      displayStatus('Please install MetaMask to use this application!', 'alert-danger', false);
+    }
+  });
+
+   // --- Event Handlers ---
+   function handleAccountsChanged(accounts) {
+        if (accounts.length === 0) {
+            currentAccount = null; retailContract = null; loyaltyTokenContract = null; // Clear state
+            displayStatus('Wallet disconnected. Please reconnect MetaMask and refresh.', 'alert-warning', false);
+             productListEl.innerHTML = '<p class="text-center">Please connect wallet and refresh.</p>';
+        } else if (accounts[0] !== currentAccount) {
+            currentAccount = accounts[0];
+            // Re-init contracts for new account
+            retailContract = new web3.eth.Contract(retailContractABI, retailContractAddress);
+            loyaltyTokenContract = new web3.eth.Contract(loyaltyTokenABI, loyaltyTokenAddress);
+            displayStatus(`Account changed to ${currentAccount.slice(0,6)}...${currentAccount.slice(-4)}. Reloading products...`, 'alert-info', false);
+            loadProducts();
+        }
+   }
+
+  // --- Product Loading ---
+  const loadProducts = async () => { /* ... same as before ... */
+     if (!retailContract || !productListEl) return;
+     productListEl.innerHTML = '<p class="text-center">Loading products...</p>';
+     try {
+         const products = await retailContract.methods.getAllProducts().call();
+         productListEl.innerHTML = "";
+         if (!products || products.length === 0) { /* ... */ }
+         products.forEach((product) => {
+            // ... create card HTML ...
+             const name = product.name || 'Unnamed Product';
+             const price = product.price || '0';
+             const stock = product.stock || '0';
+             const imageURL = product.imageURL || 'placeholder.jpg';
+             const col = document.createElement("div"); col.className = "col-md-4";
+             const priceEth = web3.utils.fromWei(price.toString(), "ether");
+             const stockNum = parseInt(stock.toString(), 10);
+             const card = `
+                <div class="card mb-4 shadow-sm">
+                   <img src="${imageURL}" ...>
+                   <div class="card-body">
+                       <h5 class="card-title">${name}</h5>
+                       <p class="card-text">Price: ${priceEth} ETH</p>
+                       <p class="card-text">Stock: ${stockNum}</p>
+                       <div class="input-group my-2">
+                           <span class="input-group-text">Qty:</span>
+                           <input type="number" class="form-control quantity-input" value="1" min="1" max="${stockNum}" id="qty-${name.replace(/\s+/g, '-')}" ${stockNum <= 0 ? 'disabled' : ''}>
+                       </div>
+                       <button class="btn btn-${stockNum > 0 ? 'primary' : 'secondary'} w-100"
+                           onclick="buyProduct('${name}', '${price}', ${stockNum})"
+                           ${stockNum <= 0 ? 'disabled' : ''}>
+                           ${stockNum <= 0 ? 'Sold Out' : 'Buy Now'}
+                       </button>
+                   </div>
+                </div>`;
+             col.innerHTML = card; productListEl.appendChild(col);
+         });
+     } catch (err) { /* ... error handling ... */ }
+  };
+
+  // --- Product Purchase ---
+  const buyProduct = async (name, priceWei, stock) => {
+    if (!retailContract || !loyaltyTokenContract || !currentAccount) {
+        alert("Please ensure your wallet is connected."); return;
+    }
+    // ... (get quantity logic) ...
+    const quantityInputId = `qty-${name.replace(/\s+/g, '-')}`;
+    const quantityInput = document.getElementById(quantityInputId);
+    const quantity = quantityInput ? parseInt(quantityInput.value, 10) : 1;
+     // ... (quantity/stock validation) ...
+     if (isNaN(quantity) || quantity <= 0 || quantity > stock) {
+         alert(`Invalid quantity (Available: ${stock}).`); return;
+     }
+
+    try {
+        // Step 1: Purchase Product
+        displayStatus(`1/2 Processing purchase...`, 'alert-info');
+        const totalWei = BigInt(priceWei) * BigInt(quantity);
+        await retailContract.methods.purchase(name, quantity).send({
+            from: currentAccount,
+            value: totalWei.toString()
+        });
+        displayStatus(`2/2 Purchase OK! Attempting ${rewardAmount} ${loyaltyTokenSymbol} transfer...`, 'alert-info');
+
+        // Step 2: Attempt transferFrom (**REQUIRES PRE-APPROVAL**)
+        try {
+            const rewardAmountStr = rewardAmount.toString(); // Amount for transferFrom
+            await loyaltyTokenContract.methods.transferFrom(
+                rewardSenderAddress, // The address configured to send rewards
+                currentAccount,      // The buyer receiving rewards
+                rewardAmountStr
+            ).send({ from: "0x83664A76fe5BC0F743522375A3144781bEd213EA" }); // Buyer initiates this tx
+
+            displayStatus(`Purchase and Token Transfer Successful! 🎉 You received ${rewardAmount} ${loyaltyTokenSymbol}.`, 'alert-success');
+
+        } catch (tokenError) {
+             console.error("Token Transfer Error (transferFrom):", tokenError);
+             // Purchase succeeded, token transfer failed
+             displayStatus(
+                `Purchase successful, BUT token transfer failed: ${tokenError.message}. ` +
+                `Verify address ${rewardSenderAddress.slice(0,6)}... has approved your address (${currentAccount.slice(0,6)}...).`,
+                'alert-warning'
+            );
+        }
+
+        loadProducts(); // Refresh stock display
+
+    } catch (purchaseError) {
+        console.error("Purchase Error:", purchaseError);
+        displayStatus(`Purchase failed: ${purchaseError.message || 'Please try again.'}`, 'alert-danger');
+    }
+  };
+
+  // --- Helper Function ---
+  function displayStatus(message, type = 'alert-info', allowHTML = false) {
+    if (!purchaseStatusAreaEl) return;
+    purchaseStatusAreaEl.className = `alert ${type} text-center`;
+    if (allowHTML) { purchaseStatusAreaEl.innerHTML = message; }
+    else { purchaseStatusAreaEl.textContent = message; }
+    purchaseStatusAreaEl.classList.remove('d-none');
+  }
+</script>
+
+<%- include('partials/footer') %>

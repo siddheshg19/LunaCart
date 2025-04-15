@@ -1,0 +1,105 @@
+<%- include('partials/header') %>
+
+<div class="container py-5" style="margin-top: 100px;">
+  <h2 class="mb-4">My Orders</h2>
+
+  <div class="mb-3">
+    <button id="connect-wallet" class="btn btn-primary me-2">Connect Wallet</button>
+    <button id="fetch-orders" class="btn btn-success" disabled>Fetch Orders</button>
+  </div>
+
+  <div id="wallet-address" class="mb-3 text-muted"></div>
+  <div id="status-message" class="mb-3 text-danger"></div>
+
+  <table class="table table-striped table-bordered">
+    <thead class="table-dark">
+      <tr>
+        <th>Txn Hash</th>
+        <th>Action</th>
+        <th>Amount (ETH)</th>
+        <th>Date</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="orders-table-body">
+      <tr><td colspan="5" class="text-center">No orders fetched yet.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+  let userAccount = '';
+  const apiKey = 'PC7R5SNQ6YYETMH1BWJ15RD4WV54K9EZV4'; 
+
+  const retailContract = '0x4Df08697158F9323cf8494f5A8f82A381B0165f1';
+
+  document.getElementById('connect-wallet').onclick = async () => {
+    if (window.ethereum) {
+      try {
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        userAccount = accounts[0];
+        document.getElementById('wallet-address').textContent = `Connected Wallet: ${userAccount}`;
+        document.getElementById('fetch-orders').disabled = false;
+      } catch (err) {
+        document.getElementById('status-message').textContent = 'Wallet connection failed.';
+      }
+    } else {
+      alert('MetaMask is not installed.');
+    }
+  };
+
+  document.getElementById('fetch-orders').onclick = async () => {
+    const tbody = document.getElementById('orders-table-body');
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center">Fetching orders...</td></tr>`;
+    document.getElementById('status-message').textContent = '';
+
+    try {
+      const url = `https://api-sepolia.etherscan.io/api?module=account&action=txlist&address=${userAccount}&startblock=0&endblock=99999999&sort=desc&apikey=${apiKey}`;
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (!Array.isArray(data.result)) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center">Error: ${data.result || 'Unexpected response'}</td></tr>`;
+        return;
+      }
+
+      const transactions = data.result.filter(tx =>
+        tx.to?.toLowerCase() === retailContract.toLowerCase()
+        
+      );
+
+      if (transactions.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center">No relevant orders found.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = '';
+      transactions.forEach(tx => {
+        const ethValue = (Number(tx.value) / 1e18).toFixed(4);
+        const date = new Date(tx.timeStamp * 1000).toLocaleString();
+        const status = tx.isError === "0" ? "✅ Success" : "❌ Failed";
+        let actionType = 'Unknown';
+
+        if (tx.to?.toLowerCase() === retailContract.toLowerCase()) {
+          actionType = '🛒 Purchase';
+        } 
+
+        tbody.innerHTML += `
+          <tr>
+            <td><a href="https://sepolia.etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0, 10)}...</a></td>
+            <td>${actionType}</td>
+            <td>${ethValue}</td>
+            <td>${date}</td>
+            <td>${status}</td>
+          </tr>
+        `;
+      });
+
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="5" class="text-center">Error fetching orders.</td></tr>`;
+      document.getElementById('status-message').textContent = err.message;
+    }
+  };
+</script>
+
+<%- include('partials/footer') %>

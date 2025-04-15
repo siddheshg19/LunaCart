@@ -1,0 +1,44 @@
+<%- include('partials/header') %>
+
+<div class="container text-center py-5" style="min-height: 100vh; margin-top: 100px;">
+  <h1 class="display-4 mt-5" >Welcome to Luna Cart</h1>
+  <p class="lead text-muted">Your gateway to decentralized retail experience</p>
+
+  <a href="/products" class="btn btn-dark mt-3">
+    Explore Products
+  </a>
+
+  <div class="mt-5">
+    <h2>Live Crypto Prices</h2>
+    <div class="d-flex justify-content-center gap-4 mt-3 flex-wrap" id="crypto-prices">
+      <div class="bg-dark text-white p-4 rounded shadow-sm">
+        <h4>Bitcoin (BTC)</h4>
+        <p id="btc-price">Loading...</p>
+      </div>
+      <div class="bg-dark text-white p-4 rounded shadow-sm">
+        <h4>Ethereum (ETH)</h4>
+        <p id="eth-price">Loading...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  async function fetchCryptoPrices() {
+    try {
+      const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd');
+      const data = await res.json();
+      document.getElementById('btc-price').innerText = `$${data.bitcoin.usd.toLocaleString()}`;
+      document.getElementById('eth-price').innerText = `$${data.ethereum.usd.toLocaleString()}`;
+    } catch (err) {
+      document.getElementById('btc-price').innerText = 'Error';
+      document.getElementById('eth-price').innerText = 'Error';
+      console.error(err);
+    }
+  }
+
+  fetchCryptoPrices();
+  setInterval(fetchCryptoPrices, 10000); // Refresh every 60 seconds
+</script>
+
+<%- include('partials/footer') %>

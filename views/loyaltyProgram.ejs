@@ -1,0 +1,323 @@
+<%- include('partials/header', { title: 'LPDT Balance' }) %>
+
+<div class="container text-center py-5" style="min-height: 80vh; margin-top: 80px;">
+    <h1 class="display-5 my-4">Check Your LPDT Balance</h1>
+    <div class="mb-4">
+        <button id="connectBtnLoyaltySimple" class="btn btn-success mx-2" onclick="connectLoyaltyWalletSimple()">Connect Wallet for LPDT</button> <!-- Unique ID -->
+        <button id="checkBtnLoyaltySimple" class="btn btn-info mx-2" onclick="checkLpdtBalanceSimple()" disabled>Check LPDT Balance</button> <!-- Unique ID -->
+    </div>
+    <div id="statusAreaLoyaltySimple" class="alert alert-secondary mt-3 mx-auto" role="alert" style="max-width: 600px;">
+        Status: Please connect wallet.
+    </div>
+    <div class="mt-4">
+        <h4>LPDT Balance:</h4>
+        <p id="balanceDisplayLoyaltySimple" class="fs-4"></p> 
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+<script>
+    const loyaltyTokenAddress = "0xb287dDB8AEE6d4564876Eb7917f8FA91a1EE7c9a"; 
+    const loyaltyTokenSymbol = "LPDT";
+    const loyaltyTokenABI = [
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "spender",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "value",
+				"type": "uint256"
+			}
+		],
+		"name": "Approval",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "from",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "value",
+				"type": "uint256"
+			}
+		],
+		"name": "Transfer",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "spender",
+				"type": "address"
+			}
+		],
+		"name": "allowance",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "spender",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "approve",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			}
+		],
+		"name": "balanceOf",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "totalSupply",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "recipient",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "transfer",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "sender",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "recipient",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "transferFrom",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	}
+];
+    let loyaltyWeb3Simple;
+    let loyaltyAccountSimple = null;
+    let loyaltyContractSimple = null;
+
+    let connectBtnSimpleEl, checkBtnSimpleEl, statusAreaSimpleEl, balanceDisplaySimpleEl;
+
+    function initializeSimpleChecker() {
+        connectBtnSimpleEl = document.getElementById('connectBtnLoyaltySimple');
+        checkBtnSimpleEl = document.getElementById('checkBtnLoyaltySimple');
+        statusAreaSimpleEl = document.getElementById('statusAreaLoyaltySimple');
+        balanceDisplaySimpleEl = document.getElementById('balanceDisplayLoyaltySimple');
+
+        if (typeof window.ethereum !== 'undefined') {
+            loyaltyWeb3Simple = new Web3(window.ethereum);
+             window.ethereum.on('accountsChanged', (accounts) => {
+                 if (accounts.length === 0) {
+                     loyaltyAccountSimple = null;
+                     loyaltyContractSimple = null;
+                     resetSimpleUI();
+                 } else if (accounts[0] !== loyaltyAccountSimple) {
+                     loyaltyAccountSimple = null;
+                     loyaltyContractSimple = null;
+                     resetSimpleUI();
+                     updateSimpleStatus('Account changed. Please reconnect for this page.', 'alert-warning');
+                 }
+             });
+        } else {
+            updateSimpleStatus('MetaMask is not installed!', 'alert-danger');
+            if (connectBtnSimpleEl) connectBtnSimpleEl.disabled = true;
+        }
+    }
+
+    async function connectLoyaltyWalletSimple() {
+        if (!loyaltyWeb3Simple) {
+            updateSimpleStatus('Web3 not available. Install MetaMask.', 'alert-danger');
+            return;
+        }
+        try {
+            updateSimpleStatus('Connecting...', 'alert-info');
+            const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+
+            if (accounts.length > 0) {
+                loyaltyAccountSimple = accounts[0];
+                loyaltyContractSimple = new loyaltyWeb3Simple.eth.Contract(loyaltyTokenABI, loyaltyTokenAddress);
+
+                updateSimpleStatus(`Connected: ${loyaltyAccountSimple.slice(0, 6)}...${loyaltyAccountSimple.slice(-4)}. Ready to check balance.`, 'alert-success');
+                if (connectBtnSimpleEl) {
+                    connectBtnSimpleEl.textContent = 'Wallet Connected';
+                    connectBtnSimpleEl.disabled = true;
+                    connectBtnSimpleEl.classList.replace('btn-success', 'btn-secondary');
+                }
+                if (checkBtnSimpleEl) checkBtnSimpleEl.disabled = false; 
+            } else {
+                resetSimpleUI();
+                updateSimpleStatus('Connection failed (no accounts found).', 'alert-warning');
+            }
+        } catch (err) {
+            console.error("Simple Connect Error:", err);
+            updateSimpleStatus(`Connection Failed: ${err.message || 'User rejected.'}`, 'alert-danger');
+            resetSimpleUI();
+        }
+    }
+
+    async function checkLpdtBalanceSimple() {
+        if (!loyaltyAccountSimple || !loyaltyContractSimple || !checkBtnSimpleEl || !balanceDisplaySimpleEl) {
+            alert("Cannot check balance. Please ensure wallet is connected using the button above.");
+            return;
+        }
+
+        updateSimpleStatus('Checking balance...', 'alert-info');
+        checkBtnSimpleEl.disabled = true; 
+
+        try {
+            const balance = await loyaltyContractSimple.methods.balanceOf(loyaltyAccountSimple).call();
+            const formattedBalance = balance.toString(); 
+
+            balanceDisplaySimpleEl.textContent = `${formattedBalance} ${loyaltyTokenSymbol}`;
+            updateSimpleStatus(`Connected: ${loyaltyAccountSimple.slice(0, 6)}...${loyaltyAccountSimple.slice(-4)}. Balance updated.`, 'alert-success');
+
+        } catch (err) {
+            console.error("Simple Balance Check Error:", err);
+            updateSimpleStatus(`Error fetching balance: ${err.message}. Are you on the correct network (Sepolia)?`, 'alert-danger');
+            balanceDisplaySimpleEl.textContent = "Error";
+        } finally {
+            if (loyaltyAccountSimple) {
+                 checkBtnSimpleEl.disabled = false;
+            }
+        }
+    }
+
+    function updateSimpleStatus(message, alertClass = 'alert-secondary') {
+        if (statusAreaSimpleEl) {
+            statusAreaSimpleEl.textContent = message;
+            statusAreaSimpleEl.className = 'alert mt-3 mx-auto'; 
+            statusAreaSimpleEl.classList.add(alertClass); 
+            statusAreaSimpleEl.style.maxWidth = '600px';
+             statusAreaSimpleEl.style.display = 'block';
+        }
+    }
+
+    function resetSimpleUI() {
+        loyaltyAccountSimple = null;
+        loyaltyContractSimple = null;
+        if (connectBtnSimpleEl) {
+            connectBtnSimpleEl.textContent = 'Connect Wallet for LPDT';
+            connectBtnSimpleEl.disabled = false;
+            connectBtnSimpleEl.classList.replace('btn-secondary', 'btn-success');
+        }
+        if (checkBtnSimpleEl) checkBtnSimpleEl.disabled = true;
+        if (balanceDisplaySimpleEl) balanceDisplaySimpleEl.textContent = 'N/A';
+        updateSimpleStatus('Status: Please connect your wallet using the button above.', 'alert-secondary');
+    }
+
+    document.addEventListener('DOMContentLoaded', initializeSimpleChecker);
+</script>
+
+<%- include('partials/footer') %>

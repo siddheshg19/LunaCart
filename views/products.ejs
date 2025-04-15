@@ -1,0 +1,473 @@
+<%- include('partials/header') %>
+
+<div class="container py-5" style="margin-top: 100px;">
+  <h1 class="text-center mb-4">Explore Products</h1>
+  <div class="row" id="productList">
+    <!-- Products will be loaded here -->
+  </div>
+</div>
+
+<!-- Include Web3.js from a CDN -->
+<script src="https://cdn.jsdelivr.net/npm/web3@1.6.1/dist/web3.min.js"></script>
+
+<script>
+  let contract;
+  const address = "0x4Df08697158F9323cf8494f5A8f82A381B0165f1"; // Contract Address
+  const ABI = [
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "buyer",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "LoyaltyTokensAwarded",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "price",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "stock",
+				"type": "uint256"
+			}
+		],
+		"name": "ProductAdded",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "buyer",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "quantity",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "totalPrice",
+				"type": "uint256"
+			}
+		],
+		"name": "ProductPurchased",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "newPrice",
+				"type": "uint256"
+			}
+		],
+		"name": "ProductUpdated",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "price",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "stock",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "imageURL",
+				"type": "string"
+			}
+		],
+		"name": "addProduct",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "quantity",
+				"type": "uint256"
+			}
+		],
+		"name": "purchase",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_newAmount",
+				"type": "uint256"
+			}
+		],
+		"name": "setRewardAmount",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "newPrice",
+				"type": "uint256"
+			}
+		],
+		"name": "updateProductPrice",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_loyaltyTokenAddress",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_initialRewardAmount",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"inputs": [],
+		"name": "getAllProducts",
+		"outputs": [
+			{
+				"components": [
+					{
+						"internalType": "string",
+						"name": "name",
+						"type": "string"
+					},
+					{
+						"internalType": "uint256",
+						"name": "price",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "stock",
+						"type": "uint256"
+					},
+					{
+						"internalType": "string",
+						"name": "imageURL",
+						"type": "string"
+					}
+				],
+				"internalType": "struct Retail.Product[]",
+				"name": "",
+				"type": "tuple[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			}
+		],
+		"name": "getProduct",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "getRewardTokenBalance",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "loyaltyToken",
+		"outputs": [
+			{
+				"internalType": "contract IERC20",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "owner",
+		"outputs": [
+			{
+				"internalType": "address payable",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "productNames",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			}
+		],
+		"name": "products",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "name",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "price",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "stock",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "imageURL",
+				"type": "string"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "rewardAmount",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+];
+
+window.addEventListener('load', async () => {
+    if (typeof window.ethereum !== 'undefined') {
+      try {
+        window.web3 = new Web3(window.ethereum);
+        await window.ethereum.request({ method: 'eth_requestAccounts' });
+        contract = new web3.eth.Contract(ABI, address);
+        console.log("MetaMask connected.");
+        console.log("Contract methods:", Object.keys(contract.methods));
+        loadProducts();
+      } catch (error) {
+        console.error("MetaMask error:", error);
+        alert('Failed to connect MetaMask');
+      }
+    } else {
+      alert("Please install MetaMask!");
+    }
+  });
+  
+
+  const loadProducts = async () => {
+    const productListEl = document.getElementById("productList");
+
+    try {
+      const products = await contract.methods.getAllProducts().call();
+      productListEl.innerHTML = "";
+
+      if (products.length === 0) {
+        productListEl.innerHTML = "<p>No products available.</p>";
+        return;
+      }
+
+      products.forEach((product) => {
+        const col = document.createElement("div");
+        col.className = "col-md-4";
+
+        const priceEth = window.web3.utils.fromWei(product.price, "ether");
+
+        const card = `
+          <div class="card mb-4 shadow-sm">
+            <img src="${product.imageURL}" class="card-img-top" alt="${product.name}" style="height: 200px; object-fit: cover;">
+            <div class="card-body">
+              <h5 class="card-title">${product.name}</h5>
+              <p class="card-text">Price: ${priceEth} ETH</p>
+              <p class="card-text">Stock: ${product.stock}</p>
+              <button class="btn btn-${product.stock > 0 ? 'success' : 'secondary'} w-100" 
+                onclick="buyProduct('${product.name}', '${product.price}', ${product.stock})" 
+                ${product.stock <= 0 ? 'disabled' : ''}>
+                ${product.stock <= 0 ? 'Sold Out' : 'Buy Now'}
+              </button>
+            </div>
+          </div>
+        `;
+
+        col.innerHTML = card;
+        productListEl.appendChild(col);
+      });
+    } catch (err) {
+      console.error("Failed to load products:", err);
+    }
+  };
+
+  const buyProduct = async (name, priceWei, stock) => {
+    if (stock <= 0) {
+      alert("This product is out of stock.");
+      return;
+    }
+
+    const quantity = prompt("Enter quantity to purchase:", "1");
+
+    if (!quantity || isNaN(quantity) || parseInt(quantity) <= 0) {
+      alert("Please enter a valid quantity.");
+      return;
+    }
+
+    try {
+      const accounts = await web3.eth.getAccounts();
+      const account = accounts[0];
+      const totalWei = BigInt(priceWei) * BigInt(quantity);
+
+      await contract.methods.purchase(name, quantity).send({
+        from: account,
+        value: totalWei.toString()
+      });
+
+      alert("Purchase successful!");
+      loadProducts(); // Refresh the stock
+    } catch (error) {
+      console.error("Purchase error:", error);
+      alert("Transaction failed. Please try again.");
+    }
+  };
+</script>
+
+<%- include('partials/footer') %>
